@@ -20,14 +20,14 @@ class Settings(BaseSettings):
     app_name: str = "LinkForge"
     app_version: str = "1.0.0"
     environment: str = Field(default="development", pattern="^(development|staging|production)$")
-    secret_key: str = Field(..., min_length=32)
+    secret_key: str = Field(default="super_secret_key_at_least_32_characters_long_12345", min_length=32)
 
     # Database
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "linkforge"
     postgres_user: str = "linkforge_user"
-    postgres_password: str = Field(...)
+    postgres_password: str = Field(default="linkforge_password")
     db_pool_size: int = 5
     db_echo: bool = False
 
