@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   loadUserLinks();
   setupUrlInputListener();
-  
+
   if (window.location.search.includes('oauth_notice=1')) {
     alert('Google OAuth requires a real GOOGLE_CLIENT_ID in your .env file. Please use the Email & Password Sign In tab for instant login!');
     openAuthModal('login');
@@ -67,11 +67,16 @@ async function fetchAliasRecommendations(url) {
 
 function renderAIRecommendations(data) {
   const bar = document.getElementById('aiRecommendationBar');
+  const badge = document.getElementById('domainTrustBadge');
   const chipsContainer = document.getElementById('suggestionChips');
 
   if (!data || !data.recommendations || data.recommendations.length === 0) {
     bar.style.display = 'none';
     return;
+  }
+
+  if (badge) {
+    badge.textContent = `🛡️ ${data.trust_score}% Trust • ${data.category}`;
   }
   
   chipsContainer.innerHTML = data.recommendations.map(opt => `
@@ -86,7 +91,7 @@ function renderAIRecommendations(data) {
 
 function selectSuggestedAlias(alias, chipElement) {
   document.getElementById('customAlias').value = alias;
-  
+
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   chipElement.classList.add('selected');
 
@@ -228,7 +233,7 @@ function toggleAdvanced() {
 
 async function handleShorten(event) {
   event.preventDefault();
-  
+
   if (!userToken) {
     alert('Please sign in or create an account first to shorten links!');
     openAuthModal('login');
@@ -278,7 +283,7 @@ async function handleShorten(event) {
     const data = await res.json();
     document.getElementById('shortenForm').reset();
     document.getElementById('advancedPanel').classList.remove('open');
-    
+
     userLinks.unshift(data);
     renderTable();
   } catch (err) {
@@ -304,7 +309,7 @@ async function loadUserLinks() {
 function renderTable() {
   const tbody = document.getElementById('linksTableBody');
   const countBadge = document.getElementById('linkCountBadge');
-  
+
   countBadge.textContent = `${userLinks.length} Link${userLinks.length === 1 ? '' : 's'}`;
 
   if (userLinks.length === 0) {
@@ -321,7 +326,7 @@ function renderTable() {
   tbody.innerHTML = userLinks.map(link => {
     const displayAlias = link.custom_alias ? link.custom_alias : link.short_code;
     const shortUrl = link.short_url || `${window.location.origin}/s/${displayAlias}`;
-    
+
     let featuresHTML = '';
     if (link.is_password_protected) featuresHTML += `<span class="badge badge-feature">🔒 Password</span>`;
     if (link.is_one_time) featuresHTML += `<span class="badge badge-feature">💣 One-Time</span>`;
@@ -386,7 +391,7 @@ async function showAnalytics(linkId) {
       const data = await res.json();
       document.getElementById('totalClicks').textContent = data.total_clicks || 0;
       document.getElementById('uniqueClicks').textContent = data.unique_clicks || 0;
-      
+
       const topRef = data.top_referrers && data.top_referrers.length > 0 ? data.top_referrers[0].name : 'Direct';
       document.getElementById('topReferrer').textContent = topRef;
 
