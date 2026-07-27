@@ -76,7 +76,7 @@ function renderAIRecommendations(data) {
   }
 
   if (badge) {
-    badge.textContent = `🛡️ ${data.trust_score}% Trust • ${data.category}`;
+    badge.textContent = `🛡️ ${data.category}`;
   }
   
   chipsContainer.innerHTML = data.recommendations.map(opt => `
