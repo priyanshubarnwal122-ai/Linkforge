@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -191,23 +192,36 @@
 
   <!-- Analytics Modal -->
   <div class="modal-overlay" id="analyticsModal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 580px;">
       <div class="modal-header">
-        <h3 class="modal-title">Link Performance Analytics</h3>
+        <h3 class="modal-title">📈 Link Performance & Audience Analytics</h3>
         <button class="close-btn" onclick="closeModal('analyticsModal')">&times;</button>
       </div>
-      <div class="stats-grid">
+      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
         <div class="stat-box">
           <div class="stat-number" id="totalClicks">0</div>
           <div class="stat-label">Total Engagements</div>
         </div>
         <div class="stat-box">
-          <div class="stat-number" id="topDevice">Desktop</div>
-          <div class="stat-label">Top Device</div>
+          <div class="stat-number" id="uniqueClicks">0</div>
+          <div class="stat-label">Unique Visitors</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="topReferrer" style="font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Direct</div>
+          <div class="stat-label">Top Channel</div>
         </div>
       </div>
-      <div id="analyticsDetails" style="font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem 0;">
-        Fetching details...
+
+      <!-- Daily Click Trend Graph -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">📊 Daily Engagement Trend (Last 7 Days)</div>
+        <div style="height: 160px; position: relative;">
+          <canvas id="clickChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div id="analyticsDetails" style="font-size: 0.85rem; color: var(--text-muted);">
+        Fetching traffic breakdown...
       </div>
     </div>
   </div>

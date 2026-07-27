@@ -178,10 +178,12 @@ class TopItem(BaseModel):
 class LinkStats(BaseModel):
     """Full analytics breakdown for a single link."""
     total_clicks: int
+    unique_clicks: int
     today_clicks: int
     last_7_days: list[DailyStats]
     top_browsers: list[TopItem]
     top_devices: list[TopItem]
+    top_referrers: list[TopItem]
 
 
 # ---------------------------------------------------------------------------

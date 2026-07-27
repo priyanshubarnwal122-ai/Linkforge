@@ -374,8 +374,12 @@ function showQR(linkId) {
   document.getElementById('qrModal').classList.add('open');
 }
 
+let clickChartInstance = null;
+
 async function showAnalytics(linkId) {
   document.getElementById('totalClicks').textContent = '...';
+  document.getElementById('uniqueClicks').textContent = '...';
+  document.getElementById('topReferrer').textContent = '...';
   document.getElementById('analyticsDetails').textContent = 'Loading click insights...';
   document.getElementById('analyticsModal').classList.add('open');
 
@@ -384,16 +388,68 @@ async function showAnalytics(linkId) {
     if (res.ok) {
       const data = await res.json();
       document.getElementById('totalClicks').textContent = data.total_clicks || 0;
+      document.getElementById('uniqueClicks').textContent = data.unique_clicks || 0;
       
-      const topDevice = data.top_devices && data.top_devices.length > 0 ? data.top_devices[0].device : 'Desktop';
-      document.getElementById('topDevice').textContent = topDevice;
+      const topRef = data.top_referrers && data.top_referrers.length > 0 ? data.top_referrers[0].name : 'Direct';
+      document.getElementById('topReferrer').textContent = topRef;
+
+      // Render Chart.js line graph
+      const ctx = document.getElementById('clickChartCanvas').getContext('2d');
+      if (clickChartInstance) {
+        clickChartInstance.destroy();
+      }
+
+      const labels = (data.last_7_days || []).map(d => d.date);
+      const counts = (data.last_7_days || []).map(d => d.clicks);
+
+      clickChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.length > 0 ? labels : ['Today'],
+          datasets: [{
+            label: 'Clicks',
+            data: counts.length > 0 ? counts : [data.total_clicks || 0],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointBackgroundColor: '#3b82f6'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { precision: 0 } }
+          }
+        }
+      });
+
+      // Render Referrers, Devices, and Browsers HTML
+      const referrersHTML = data.top_referrers && data.top_referrers.length > 0
+        ? data.top_referrers.map(r => `<span class="badge" style="background:var(--bg-input); border:1px solid var(--border-subtle); color:var(--text-main); margin-right:4px;">${r.name}: <strong>${r.count}</strong></span>`).join(' ')
+        : 'Direct / External Visits';
+
+      const browsersHTML = data.top_browsers && data.top_browsers.length > 0
+        ? data.top_browsers.map(b => `${b.name} (${b.count})`).join(', ')
+        : 'No browser data yet';
+
+      const devicesHTML = data.top_devices && data.top_devices.length > 0
+        ? data.top_devices.map(d => `${d.name} (${d.count})`).join(', ')
+        : 'Desktop';
 
       document.getElementById('analyticsDetails').innerHTML = `
-        <p><strong>Browser Distribution:</strong> ${data.top_browsers && data.top_browsers.length > 0 ? data.top_browsers.map(b => `${b.browser} (${b.clicks})`).join(', ') : 'No click data yet'}</p>
-        <p style="margin-top:0.35rem;"><strong>Daily Breakdowns:</strong> ${data.daily_clicks ? data.daily_clicks.length : 0} active days recorded.</p>
+        <div style="margin-bottom: 0.4rem;"><strong>🔗 Traffic Referrers:</strong> ${referrersHTML}</div>
+        <div style="margin-bottom: 0.4rem;"><strong>🌐 Browsers:</strong> ${browsersHTML}</div>
+        <div><strong>📱 Devices:</strong> ${devicesHTML}</div>
       `;
     }
   } catch (err) {
+    console.error(err);
     document.getElementById('analyticsDetails').textContent = 'Failed to load stats.';
   }
 }

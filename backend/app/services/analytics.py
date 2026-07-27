@@ -100,9 +100,33 @@ async def record_click(link_id: uuid.UUID, request: Request) -> None:
         log.warning("click_record_failed", link_id=str(link_id), error=str(e))
 
 
-# ---------------------------------------------------------------------------
-# Stats queries
-# ---------------------------------------------------------------------------
+def _clean_referer(referer: str | None) -> str:
+    if not referer:
+        return "Direct / WhatsApp / Email"
+    r = referer.lower()
+    if "lnkd.in" in r or "linkedin" in r:
+        return "LinkedIn"
+    if "t.co" in r or "twitter" in r or "x.com" in r:
+        return "Twitter / X"
+    if "t.me" in r or "telegram" in r:
+        return "Telegram"
+    if "wa.me" in r or "whatsapp" in r:
+        return "WhatsApp"
+    if "google" in r:
+        return "Google Search"
+    if "github" in r:
+        return "GitHub"
+    if "facebook" in r:
+        return "Facebook"
+    if "instagram" in r:
+        return "Instagram"
+    from urllib.parse import urlparse
+    try:
+        domain = urlparse(referer).netloc
+        return domain.replace("www.", "") if domain else "Direct / External"
+    except Exception:
+        return "Direct / External"
+
 
 async def get_link_stats(session: AsyncSession, link_id: uuid.UUID) -> dict:
     today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -113,6 +137,12 @@ async def get_link_stats(session: AsyncSession, link_id: uuid.UUID) -> dict:
         select(func.count()).select_from(ClickEvent).where(ClickEvent.link_id == link_id)
     )
     total_clicks = total_result.scalar_one()
+
+    # Unique clicks (distinct IP addresses)
+    unique_result = await session.execute(
+        select(func.count(func.distinct(ClickEvent.ip_address))).where(ClickEvent.link_id == link_id)
+    )
+    unique_clicks = unique_result.scalar_one() or total_clicks
 
     # Today's clicks
     today_result = await session.execute(
@@ -154,10 +184,20 @@ async def get_link_stats(session: AsyncSession, link_id: uuid.UUID) -> dict:
     )
     top_devices = [{"name": row.device_type, "count": row.count} for row in device_result]
 
+    # Top referrers
+    ref_result = await session.execute(
+        select(ClickEvent.referer).where(ClickEvent.link_id == link_id)
+    )
+    raw_referers = [row.referer for row in ref_result]
+    counts = Counter(_clean_referer(r) for r in raw_referers)
+    top_referrers = [{"name": name, "count": count} for name, count in counts.most_common(5)]
+
     return {
         "total_clicks": total_clicks,
+        "unique_clicks": unique_clicks,
         "today_clicks": today_clicks,
         "last_7_days": last_7_days,
         "top_browsers": top_browsers,
         "top_devices": top_devices,
+        "top_referrers": top_referrers,
     }

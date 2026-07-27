@@ -28,10 +28,12 @@ async def link_stats(link_id: str, db: DbSession) -> LinkStats:
 
     return LinkStats(
         total_clicks=raw["total_clicks"],
+        unique_clicks=raw["unique_clicks"],
         today_clicks=raw["today_clicks"],
         last_7_days=raw["last_7_days"],
         top_browsers=raw["top_browsers"],
         top_devices=raw["top_devices"],
+        top_referrers=raw["top_referrers"],
     )
 
 
