@@ -67,15 +67,12 @@ async function fetchAliasRecommendations(url) {
 
 function renderAIRecommendations(data) {
   const bar = document.getElementById('aiRecommendationBar');
-  const badge = document.getElementById('domainTrustBadge');
   const chipsContainer = document.getElementById('suggestionChips');
 
   if (!data || !data.recommendations || data.recommendations.length === 0) {
     bar.style.display = 'none';
     return;
   }
-
-  badge.textContent = `🛡️ ${data.trust_score}% Trust • ${data.category}`;
   
   chipsContainer.innerHTML = data.recommendations.map(opt => `
     <button type="button" class="chip ${opt.available ? '' : 'disabled'}" onclick="selectSuggestedAlias('${opt.alias}', this)">
