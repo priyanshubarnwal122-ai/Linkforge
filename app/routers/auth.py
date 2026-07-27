@@ -5,6 +5,7 @@ No business logic here — just HTTP: parse request, call service, return respon
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi.responses import RedirectResponse
 
 from app.deps import CurrentUserId, DbSession
 from app.schemas import RefreshRequest, TokenPair, UserCreate, UserLogin, UserResponse
@@ -53,3 +54,15 @@ async def verify_email(token: str, db: DbSession) -> dict[str, str]:
 async def me(user_id: CurrentUserId, db: DbSession) -> UserResponse:
     user = await AuthService(db).get_user(user_id)
     return UserResponse.model_validate(user)
+
+
+@router.get("/google/login", summary="Redirect to Google OAuth login page")
+async def google_login() -> RedirectResponse:
+    url = AuthService.get_google_auth_url()
+    return RedirectResponse(url=url)
+
+
+@router.get("/google/callback", summary="Google OAuth callback endpoint")
+async def google_callback(code: str, db: DbSession) -> RedirectResponse:
+    tokens = await AuthService(db).google_login_callback(code)
+    return RedirectResponse(url=f"/#access_token={tokens['access_token']}")

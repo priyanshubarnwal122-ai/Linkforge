@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkForge Enterprise — URL Shortener & Analytics</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Enterprise Navigation Header -->
+  <header class="top-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+        <span>LinkForge</span>
+      </div>
+      <span class="security-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+        OAuth 2.0 & SSL Verified
+      </span>
+    </div>
+
+    <div class="user-controls" id="userControls">
+      <button class="btn-primary" onclick="openAuthModal('login')">Sign In</button>
+      <button class="btn-secondary" onclick="openAuthModal('register')">Create Account</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    
+    <div class="page-header">
+      <h1 class="page-title">Enterprise Link Management</h1>
+      <p class="page-subtitle">Shorten URLs, attach smart device routing, password protection, and view analytics.</p>
+    </div>
+
+    <!-- Shortener Form Card -->
+    <div class="card">
+      <form id="shortenForm" onsubmit="handleShorten(event)">
+        <div class="shortener-input-group">
+          <input type="url" id="targetUrl" class="input-text" placeholder="Paste a long URL to shorten (e.g. https://example.com/very/long/path)" required />
+          <button type="submit" class="btn-primary">Shorten URL</button>
+        </div>
+
+        <!-- AI Smart Alias Recommender & Domain Vibe Badge -->
+        <div id="aiRecommendationBar" class="ai-recommendation-bar" style="display: none;">
+          <div class="ai-header">
+            <span id="domainTrustBadge" class="trust-badge">🛡️ 98% Trust • Web Resource</span>
+            <span class="ai-label">✨ Click a Smart Alias suggestion:</span>
+          </div>
+          <div id="suggestionChips" class="suggestion-chips"></div>
+        </div>
+
+        <!-- Custom Vanity Alias (Always Visible) -->
+        <div class="form-group" style="margin-top: 0.85rem;">
+          <label for="customAlias">Custom Vanity Alias (Optional)</label>
+          <input type="text" id="customAlias" class="input-text" placeholder="e.g. github_p or my-resume" />
+        </div>
+
+        <button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
+          ⚙️ Security & Device Routing Options
+        </button>
+
+        <div class="advanced-panel" id="advancedPanel">
+          <div class="form-group">
+            <label for="linkPassword">Password Protection</label>
+            <input type="password" id="linkPassword" class="input-text" placeholder="Set secret password" />
+          </div>
+
+          <div class="form-group">
+            <label for="iosUrl">iOS Specific URL</label>
+            <input type="url" id="iosUrl" class="input-text" placeholder="App Store link for iOS" />
+          </div>
+
+          <div class="form-group">
+            <label for="androidUrl">Android Specific URL</label>
+            <input type="url" id="androidUrl" class="input-text" placeholder="Play Store link for Android" />
+          </div>
+
+          <div class="form-group" style="justify-content: center;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="isOneTime" />
+              <span>One-Time Self-Destructing Link</span>
+            </label>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Active Links Table -->
+    <div class="table-card">
+      <div class="table-header">
+        <h2 class="table-title">Your Shortened Links</h2>
+        <span class="badge badge-active" id="linkCountBadge">0 Links</span>
+      </div>
+
+      <table class="enterprise-table">
+        <thead>
+          <tr>
+            <th>Short Code</th>
+            <th>Original Destination</th>
+            <th>Features Attached</th>
+            <th>Clicks</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="linksTableBody">
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 2rem;">
+              No links created yet. Sign in and paste a URL above to create your first short link!
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Auth Modal (Sign In / Register) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="authModalTitle">Sign In to LinkForge</h3>
+        <button class="close-btn" onclick="closeModal('authModal')">&times;</button>
+      </div>
+
+      <!-- Auth Tab Switches -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="loginEmail">Email Address</label>
+          <input type="email" id="loginEmail" class="input-text" placeholder="name@company.com" required />
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" class="input-text" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; margin-bottom: 0.5rem;">Sign In</button>
+        <button type="button" class="btn-secondary" style="width: 100%; justify-content: center;" onclick="fillDemoAccount()">⚡ Fill Demo Account Credentials</button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" onsubmit="handleRegisterSubmit(event)" style="display: none;">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="regUsername">Username</label>
+          <input type="text" id="regUsername" class="input-text" placeholder="johndoe" required />
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="regEmail">Email Address</label>
+          <input type="email" id="regEmail" class="input-text" placeholder="name@company.com" required />
+        </div>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" class="input-text" placeholder="At least 8 characters" required />
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">Create Account</button>
+      </form>
+
+      <div style="text-align: center; margin: 1.25rem 0 0.5rem 0; font-size: 0.8rem; color: var(--text-subtle);">OR</div>
+
+      <!-- Google OAuth Button -->
+      <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="handleGoogleLogin()">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+        Continue with Google
+      </button>
+    </div>
+  </div>
+
+  <!-- QR Code Modal -->
+  <div class="modal-overlay" id="qrModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">PNG QR Code Export</h3>
+        <button class="close-btn" onclick="closeModal('qrModal')">&times;</button>
+      </div>
+      <div class="qr-container">
+        <img id="qrImage" src="" alt="QR Code" class="qr-image" />
+        <br />
+        <a id="qrDownloadBtn" href="" download="qrcode.png" class="btn-primary">Download QR Code</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analytics Modal -->
+  <div class="modal-overlay" id="analyticsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Link Performance Analytics</h3>
+        <button class="close-btn" onclick="closeModal('analyticsModal')">&times;</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-number" id="totalClicks">0</div>
+          <div class="stat-label">Total Engagements</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="topDevice">Desktop</div>
+          <div class="stat-label">Top Device</div>
+        </div>
+      </div>
+      <div id="analyticsDetails" style="font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem 0;">
+        Fetching details...
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

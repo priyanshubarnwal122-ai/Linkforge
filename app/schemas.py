@@ -104,10 +104,19 @@ class RefreshRequest(BaseModel):
 class LinkCreate(BaseModel):
     original_url: str = Field(..., max_length=2048)
     custom_alias: str | None = Field(
-        default=None, min_length=3, max_length=50,
+        default=None, min_length=2, max_length=50,
         pattern=r"^[a-zA-Z0-9_-]+$",
         description="Optional vanity alias, e.g. 'my-resume'"
     )
+
+    @field_validator("custom_alias", mode="before")
+    @classmethod
+    def clean_alias(cls, v: str | None) -> str | None:
+        if v:
+            v = v.lstrip("/").strip().lower()
+            if not v:
+                return None
+        return v
     expires_at: datetime | None = Field(default=None, description="Optional expiry date")
     max_clicks: int | None = Field(default=None, ge=1, description="Link dies after this many clicks")
 
@@ -173,3 +182,24 @@ class LinkStats(BaseModel):
     last_7_days: list[DailyStats]
     top_browsers: list[TopItem]
     top_devices: list[TopItem]
+
+
+# ---------------------------------------------------------------------------
+# Alias Recommender schemas
+# ---------------------------------------------------------------------------
+
+class AliasRecommendRequest(BaseModel):
+    url: str = Field(..., max_length=2048, description="URL to generate alias recommendations for")
+
+
+class AliasOption(BaseModel):
+    alias: str
+    available: bool
+
+
+class AliasRecommendResponse(BaseModel):
+    domain: str
+    category: str
+    trust_score: int
+    recommendations: list[AliasOption]
+

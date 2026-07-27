@@ -43,9 +43,37 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
-    app.include_router(links.router, prefix=API_PREFIX)
     app.include_router(analytics.router, prefix=API_PREFIX)
-    app.include_router(links.redirect_router)  # no prefix — /{short_code} at root
+    app.include_router(links.router, prefix=API_PREFIX)
+
+    import os
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+    if not os.path.exists(frontend_dir):
+        frontend_dir = "frontend"
+
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        index_path = os.path.join(frontend_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"message": "LinkForge API is running"}
+
+    @app.get("/styles.css", include_in_schema=False)
+    async def serve_css():
+        return FileResponse(os.path.join(frontend_dir, "styles.css"))
+
+    @app.get("/app.js", include_in_schema=False)
+    async def serve_js():
+        return FileResponse(os.path.join(frontend_dir, "app.js"))
+
+    app.include_router(links.redirect_router)  # /s/{short_code}
+
+    if os.path.exists(frontend_dir):
+        app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+        app.mount("/assets", StaticFiles(directory=frontend_dir), name="assets")
 
     @app.on_event("startup")
     async def startup() -> None:

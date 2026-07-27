@@ -1,17 +1,12 @@
 """
-app/services/auth.py — Authentication service.
-
-Innovations:
-  1. Brute-force protection  — Redis counter per IP+email, locks after 5 failed attempts
-  2. Refresh token rotation  — each /refresh revokes the old token, issues a fresh pair
-  3. Login tracking          — login_count + last_login_at updated on every login
-  4. Verification via JWT    — no extra DB table; the signed token IS the proof
+app/services/auth.py — Authentication service (password + Google OAuth + Redis security).
 """
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 
+import httpx
 import structlog
 from fastapi import BackgroundTasks
 from sqlalchemy import select
@@ -38,28 +33,27 @@ _LOCKOUT_SECONDS = 900  # 15 minutes
 
 
 # ---------------------------------------------------------------------------
-# User DB helpers (direct queries — no abstract base class needed)
+# Database Helpers
 # ---------------------------------------------------------------------------
 
 async def _get_by_email(session: AsyncSession, email: str) -> User | None:
-    result = await session.execute(
-        select(User).where(User.email == email.lower().strip(), User.deleted_at.is_(None))
-    )
-    return result.scalars().first()
+    res = await session.execute(select(User).where(User.email == email.lower().strip(), User.deleted_at.is_(None)))
+    return res.scalars().first()
 
 
 async def _get_by_username(session: AsyncSession, username: str) -> User | None:
-    result = await session.execute(
-        select(User).where(User.username == username.lower().strip(), User.deleted_at.is_(None))
-    )
-    return result.scalars().first()
+    res = await session.execute(select(User).where(User.username == username.lower().strip(), User.deleted_at.is_(None)))
+    return res.scalars().first()
 
 
 async def _get_by_id(session: AsyncSession, user_id: uuid.UUID) -> User | None:
-    result = await session.execute(
-        select(User).where(User.id == user_id, User.deleted_at.is_(None))
-    )
-    return result.scalars().first()
+    res = await session.execute(select(User).where(User.id == user_id, User.deleted_at.is_(None)))
+    return res.scalars().first()
+
+
+async def _get_by_google_id(session: AsyncSession, google_id: str) -> User | None:
+    res = await session.execute(select(User).where(User.google_id == google_id, User.deleted_at.is_(None)))
+    return res.scalars().first()
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +64,7 @@ class AuthService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    # --- Brute force helpers ---
+    # --- Redis Security & Session Helpers ---
 
     @staticmethod
     def _bf_key(ip: str, email: str) -> str:
@@ -85,39 +79,33 @@ class AuthService:
         attempts = await r.get(self._bf_key(ip, email))
         if attempts and int(attempts) >= _MAX_ATTEMPTS:
             ttl = await r.ttl(self._bf_key(ip, email))
-            mins = ttl // 60 + 1
-            raise AuthenticationError(
-                f"Too many failed attempts. Try again in {mins} minute{'s' if mins != 1 else ''}."
-            )
+            raise AuthenticationError(f"Too many failed attempts. Locked for {ttl // 60 + 1} minutes.")
 
     async def _record_failure(self, ip: str, email: str) -> None:
         r = await get_redis()
-        key = self._bf_key(ip, email)
         pipe = r.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, _LOCKOUT_SECONDS)
+        pipe.incr(self._bf_key(ip, email))
+        pipe.expire(self._bf_key(ip, email), _LOCKOUT_SECONDS)
         await pipe.execute()
 
-    async def _clear_failures(self, ip: str, email: str) -> None:
-        r = await get_redis()
-        await r.delete(self._bf_key(ip, email))
+    async def _issue_tokens(self, user: User) -> dict[str, str]:
+        """Issue access + refresh token pair and store refresh JTI in Redis."""
+        user.login_count = (user.login_count or 0) + 1
+        user.last_login_at = datetime.now(UTC)
+        self.session.add(user)
+        await self.session.flush()
 
-    # --- Refresh token store ---
+        access_token = create_access_token(str(user.id))
+        refresh_token = create_refresh_token(str(user.id))
+        payload = decode_token(refresh_token, expected_type="refresh")
 
-    async def _store_refresh_token(self, jti: str, user_id: str) -> None:
         s = get_settings()
         r = await get_redis()
-        await r.setex(self._rt_key(jti), s.refresh_token_expire_days * 86400, user_id)
+        await r.setex(self._rt_key(payload["jti"]), s.refresh_token_expire_days * 86400, str(user.id))
 
-    async def _revoke_refresh_token(self, jti: str) -> None:
-        r = await get_redis()
-        await r.delete(self._rt_key(jti))
+        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
-    async def _is_refresh_valid(self, jti: str) -> bool:
-        r = await get_redis()
-        return await r.exists(self._rt_key(jti)) == 1
-
-    # --- Auth operations ---
+    # --- Authentication Methods ---
 
     async def register(self, data: UserCreate, background_tasks: BackgroundTasks) -> User:
         if await _get_by_email(self.session, data.email):
@@ -141,68 +129,50 @@ class AuthService:
 
     async def login(self, email: str, password: str, ip: str = "unknown") -> dict[str, str]:
         await self._check_lockout(ip, email)
-
         user = await _get_by_email(self.session, email)
 
         if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
             await self._record_failure(ip, email)
-            log.warning("login_failed", email=email, ip=ip)
             raise AuthenticationError("Incorrect email or password.")
 
         if not user.is_active:
-            raise AuthorizationError("Your account has been deactivated. Contact support.")
+            raise AuthorizationError("Account deactivated.")
 
-        await self._clear_failures(ip, email)
-
-        # Update login tracking
-        user.login_count = (user.login_count or 0) + 1
-        user.last_login_at = datetime.now(UTC)
-        self.session.add(user)
-        await self.session.flush()
-
-        access_token = create_access_token(str(user.id))
-        refresh_token = create_refresh_token(str(user.id))
-
-        payload = decode_token(refresh_token, expected_type="refresh")
-        await self._store_refresh_token(payload["jti"], str(user.id))
-
-        log.info("login_success", user_id=str(user.id), ip=ip, login_count=user.login_count)
-        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+        r = await get_redis()
+        await r.delete(self._bf_key(ip, email))
+        log.info("login_success", user_id=str(user.id), ip=ip)
+        return await self._issue_tokens(user)
 
     async def refresh(self, refresh_token: str) -> dict[str, str]:
-        """Token rotation: revoke old, issue fresh pair. Prevents replay attacks."""
         payload = decode_token(refresh_token, expected_type="refresh")
         jti, user_id = payload.get("jti", ""), payload.get("sub", "")
 
-        if not await self._is_refresh_valid(jti):
-            raise AuthenticationError("Session expired. Please log in again.")
+        r = await get_redis()
+        if not await r.exists(self._rt_key(jti)):
+            raise AuthenticationError("Session expired. Log in again.")
 
-        await self._revoke_refresh_token(jti)
-        new_access = create_access_token(user_id)
-        new_refresh = create_refresh_token(user_id)
-        new_payload = decode_token(new_refresh, expected_type="refresh")
-        await self._store_refresh_token(new_payload["jti"], user_id)
+        await r.delete(self._rt_key(jti))
+        user = await _get_by_id(self.session, uuid.UUID(user_id))
+        if not user:
+            raise NotFoundError("User not found.")
 
         log.info("token_rotated", user_id=user_id)
-        return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
+        return await self._issue_tokens(user)
 
     async def logout(self, refresh_token: str) -> None:
         try:
             payload = decode_token(refresh_token, expected_type="refresh")
-            await self._revoke_refresh_token(payload.get("jti", ""))
+            r = await get_redis()
+            await r.delete(self._rt_key(payload.get("jti", "")))
             log.info("logout", user_id=payload.get("sub"))
         except AuthenticationError:
-            pass  # Already invalid — fine
+            pass
 
     async def verify_email(self, token: str) -> User:
-        try:
-            payload = decode_token(token, expected_type="verification")
-        except AuthenticationError:
-            raise AuthenticationError("This verification link is invalid or has expired.")
-
+        payload = decode_token(token, expected_type="verification")
         user = await _get_by_id(self.session, uuid.UUID(payload["sub"]))
         if not user:
-            raise AuthenticationError("User account not found.")
+            raise AuthenticationError("User not found.")
 
         if not user.is_verified:
             user.is_verified = True
@@ -217,19 +187,90 @@ class AuthService:
             raise NotFoundError(f"User '{user_id}' not found.")
         return user
 
+    # --- Google OAuth ---
+
+    @staticmethod
+    def get_google_auth_url() -> str:
+        s = get_settings()
+        if not s.google_client_id or "your_google_client_id" in s.google_client_id or s.google_client_id == "dummy_google_client_id":
+            return "/?oauth_notice=1"
+        params = {
+            "client_id": s.google_client_id,
+            "redirect_uri": s.google_redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        return f"https://accounts.google.com/o/oauth2/v2/auth?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    async def google_login_callback(self, code: str) -> dict[str, str]:
+        s = get_settings()
+        if not s.google_client_id or not s.google_client_secret:
+            raise ConflictError("Google OAuth credentials missing in .env.")
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": s.google_client_id,
+                    "client_secret": s.google_client_secret,
+                    "redirect_uri": s.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if res.status_code != 200:
+                raise AuthenticationError("Failed to authenticate with Google.")
+
+            token = res.json().get("access_token")
+            user_res = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if user_res.status_code != 200:
+                raise AuthenticationError("Failed to fetch Google user profile.")
+
+            info = user_res.json()
+
+        google_id, email = info.get("id"), info.get("email", "").lower().strip()
+        if not google_id or not email:
+            raise AuthenticationError("Invalid Google profile data.")
+
+        user = await _get_by_google_id(self.session, google_id) or await _get_by_email(self.session, email)
+
+        if user:
+            user.google_id = google_id
+            if info.get("picture") and not user.avatar_url:
+                user.avatar_url = info.get("picture")
+        else:
+            base_username = email.split("@")[0]
+            username = base_username
+            counter = 1
+            while await _get_by_username(self.session, username):
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            user = User(
+                email=email,
+                username=username,
+                full_name=info.get("name"),
+                google_id=google_id,
+                avatar_url=info.get("picture"),
+                is_verified=True,
+            )
+            self.session.add(user)
+
+        return await self._issue_tokens(user)
+
 
 # ---------------------------------------------------------------------------
-# Background task
+# Background Task
 # ---------------------------------------------------------------------------
 
 async def _send_verification_email(user: User) -> None:
     s = get_settings()
     token = create_verification_token(str(user.id), user.email)
     verify_url = f"{s.base_url}/api/v1/auth/verify-email?token={token}"
-
     if not s.is_production:
-        # In dev: copy this URL into your browser to verify the account
         log.info("verification_link", email=user.email, url=verify_url)
-    else:
-        # TODO: plug in SendGrid / Resend / SES here
-        log.warning("email_not_configured", email=user.email)
