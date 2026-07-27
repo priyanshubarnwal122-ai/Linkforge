@@ -47,7 +47,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: linkforge_api
     restart: unless-stopped
@@ -62,7 +62,8 @@ services:
       - --reload-dir
       - /app/app
     volumes:
-      - .:/app
+      - ./backend:/app
+      - ./frontend:/frontend
     ports:
       - "8000:8000"
     networks:
