@@ -74,11 +74,11 @@ class Settings(BaseSettings):
 
     @property
     def docs_url(self) -> str | None:
-        return None if self.is_production else "/docs"
+        return "/docs"
 
     @property
     def redoc_url(self) -> str | None:
-        return None if self.is_production else "/redoc"
+        return "/redoc"
 
     @field_validator("cors_origins", mode="before")
     @classmethod
