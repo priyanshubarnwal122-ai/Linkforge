@@ -1,0 +1,53 @@
+# ============================================================
+# LinkForge .gitignore
+# ============================================================
+
+# ─── Python ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── Virtual environments ───────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Secrets (NEVER commit) ─────────────────────────────────
+.env
+*.pem
+*.key
+*.p12
+
+# ─── Testing ────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Type checking ──────────────────────────────────────────
+.mypy_cache/
+
+# ─── Editors ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ─── Docker ─────────────────────────────────────────────────
+*.log
+
+# ─── Alembic ────────────────────────────────────────────────
+# Keep versions tracked; ignore only local dev artifacts
+alembic/__pycache__/
+
+# ─── QR codes / uploads ─────────────────────────────────────
+uploads/
+media/

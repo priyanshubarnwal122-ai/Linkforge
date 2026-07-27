@@ -1,0 +1,33 @@
+# LinkForge — Runtime Dependencies
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.31
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.0
+alembic>=1.13.0
+
+# Validation & Settings
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Auth
+bcrypt>=4.0.0
+python-jose[cryptography]>=3.3.0
+
+# HTTP client (title fetch, OAuth)
+httpx>=0.27.0
+
+# Logging
+structlog>=24.2.0
+
+# Redis
+redis[hiredis]>=5.0.0
+
+# Misc
+python-multipart>=0.0.9
+qrcode[pil]>=7.4.2
+Pillow>=10.3.0
