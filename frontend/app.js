@@ -325,7 +325,7 @@ function renderTable() {
 
   tbody.innerHTML = userLinks.map(link => {
     const displayAlias = link.custom_alias ? link.custom_alias : link.short_code;
-    const shortUrl = link.short_url || `${window.location.origin}/s/${displayAlias}`;
+    const shortUrl = `${window.location.origin}/s/${displayAlias}`;
 
     let featuresHTML = '';
     if (link.is_password_protected) featuresHTML += `<span class="badge badge-feature">🔒 Password</span>`;
