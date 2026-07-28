@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
 
+    # AI / LLM API Keys (Optional)
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+    groq_api_key: str | None = None
+
     # App behaviour
     base_url: str = "http://localhost:8000"
     short_code_length: int = Field(default=7, ge=4, le=20)
