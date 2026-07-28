@@ -27,8 +27,10 @@ Built using a microservice-oriented architecture with **Python 3.12 (FastAPI)**,
 * **IP Anonymization at Ingestion**: Visitor IP addresses are immediately anonymized at ingestion using salted SHA-256 truncation (`anon_...`).
 * **Why It Matters**: Provides 100% GDPR-compliant analytics while maintaining accurate unique visitor deduplication.
 
-### 🤖 Innovation 3: AI Smart Alias Recommender & Domain Category Analyzer
-* **How It Works**: Real-time debounced 400ms input listener on the URL box. Extracts domain keywords, generates 3–4 brandable vanity alias candidates (e.g. `/facebook-react`, `/github-direct`), runs real-time async PostgreSQL queries (`SELECT 1 FROM urls WHERE custom_alias = ?`) to verify 100% availability, and displays a domain category badge (`🛡️ Developer Tools & Code`).
+### 🤖 Innovation 3: GenAI LLM & Semantic NLP Alias Recommender Engine
+* **How It Works**: Real-time debounced 400ms listener on the URL box. Integrates directly with GenAI LLM APIs (Google Gemini 1.5 Flash / Groq Llama 3 / OpenAI) to generate 4 ultra-smart, contextual vanity alias suggestions (e.g. `/facebook-react`, `/apple-iphone-15-pro-max`).
+* **Zero Gimmicky Fillers**: Replaced template filler words (`-vip`, `go-`, `-direct`) with genuine semantic NLP entity parsing and LLM prompt engineering.
+* **Database Availability Verification**: Executes real-time async PostgreSQL queries (`SELECT 1 FROM urls WHERE custom_alias = ?`) to verify candidate availability.
 
 ### 🔒 Innovation 4: Password-Protected Links
 * **How It Works**: Restricts link access behind an interactive HTML password gate (`?pw=secret`). Anyone visiting the link without the password sees a clean lock screen.
