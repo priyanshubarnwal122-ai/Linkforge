@@ -202,6 +202,6 @@ class AliasOption(BaseModel):
 class AliasRecommendResponse(BaseModel):
     domain: str
     category: str
-    trust_score: int
+    trust_score: int = 95
     recommendations: list[AliasOption]
 

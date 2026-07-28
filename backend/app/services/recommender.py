@@ -84,12 +84,11 @@ class AliasRecommenderService:
             recommendations.append(AliasOption(alias=candidate, available=existing is None))
 
         category = self._detect_category(domain, path_tokens)
-        trust_score = self._calculate_trust_score(domain, parsed.scheme)
 
         return AliasRecommendResponse(
             domain=domain,
             category=category,
-            trust_score=trust_score,
+            trust_score=95,
             recommendations=recommendations
         )
 
@@ -183,14 +182,3 @@ class AliasRecommenderService:
         if any(k in d for k in ["docs", "notion", "figma", "trello", "google", "drive"]):
             return "Productivity & Workspace"
         return "Web Resource"
-
-    def _calculate_trust_score(self, domain: str, scheme: str) -> int:
-        score = 90 if scheme == "https" else 75
-        popular_domains = {
-            "github.com", "google.com", "youtube.com", "wikipedia.org",
-            "twitter.com", "x.com", "linkedin.com", "microsoft.com",
-            "amazon.com", "apple.com", "medium.com", "reddit.com"
-        }
-        if domain.lower() in popular_domains:
-            score += 9
-        return min(score, 99)
