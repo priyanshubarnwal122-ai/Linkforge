@@ -56,7 +56,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_google_redirect_uri(self) -> str:
-        """Returns dynamic Google OAuth redirect URI based on deployment base_url."""
+        """Returns dynamic Google OAuth redirect URI based on deployment environment or base_url."""
+        import os
+        render_url = os.getenv("RENDER_EXTERNAL_URL")
+        if render_url:
+            return f"{render_url.rstrip('/')}/api/v1/auth/google/callback"
         if self.google_redirect_uri and "localhost" not in self.google_redirect_uri:
             return self.google_redirect_uri
         base = self.base_url.rstrip("/")
