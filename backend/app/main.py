@@ -92,6 +92,19 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup() -> None:
+        # Safety net: create all tables if they don't exist yet
+        # (alembic handles proper migrations; this catches fresh DBs)
+        try:
+            from app.database import engine
+            from app.database import Base
+            import app.models.user  # noqa: F401
+            import app.models.url   # noqa: F401
+            import app.models.click # noqa: F401
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            log.info("db_tables_ready")
+        except Exception as e:
+            log.warning("db_create_all_failed", error=str(e))
         log.info("app_ready", name=s.app_name, env=s.environment)
 
     @app.on_event("shutdown")
