@@ -35,8 +35,10 @@ RUN groupadd --gid 1001 linkforge && \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=linkforge:linkforge backend/ .
-COPY --chown=linkforge:linkforge frontend/ /frontend
+COPY --chown=linkforge:linkforge . .
+
+# frontend/ is bundled inside backend/ for build context access
+RUN if [ -d "/app/frontend" ]; then cp -r /app/frontend /frontend; fi
 
 USER linkforge
 

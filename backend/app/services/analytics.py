@@ -58,11 +58,20 @@ def _parse_ua(ua: str | None) -> tuple[str, str]:
     return browser, device
 
 
+import hashlib
+
+
+def _anonymize_ip(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    # Privacy engineering: SHA-256 IP anonymization at ingestion (GDPR compliant)
+    return "anon_" + hashlib.sha256(f"linkforge_salt_{ip}".encode()).hexdigest()[:16]
+
+
 def _get_ip(request: Request) -> str | None:
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
+    raw_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    return _anonymize_ip(raw_ip)
 
 
 def _get_referer(request: Request) -> str | None:

@@ -2,14 +2,12 @@
 app/models/user.py
 """
 from __future__ import annotations
-
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin, UUIDMixin
-
 
 class User(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "users"
@@ -19,7 +17,6 @@ class User(Base, UUIDMixin, TimestampMixin):
     full_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)  # None = OAuth-only user
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
