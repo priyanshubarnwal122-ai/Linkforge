@@ -76,6 +76,8 @@ class AuthService:
 
     async def _check_lockout(self, ip: str, email: str) -> None:
         r = await get_redis()
+        if r is None:
+            return   # Redis down — skip lockout check
         attempts = await r.get(self._bf_key(ip, email))
         if attempts and int(attempts) >= _MAX_ATTEMPTS:
             ttl = await r.ttl(self._bf_key(ip, email))
@@ -83,6 +85,8 @@ class AuthService:
 
     async def _record_failure(self, ip: str, email: str) -> None:
         r = await get_redis()
+        if r is None:
+            return   # Redis down — skip failure recording
         pipe = r.pipeline()
         pipe.incr(self._bf_key(ip, email))
         pipe.expire(self._bf_key(ip, email), _LOCKOUT_SECONDS)
@@ -101,7 +105,8 @@ class AuthService:
 
         s = get_settings()
         r = await get_redis()
-        await r.setex(self._rt_key(payload["jti"]), s.refresh_token_expire_days * 86400, str(user.id))
+        if r is not None:
+            await r.setex(self._rt_key(payload["jti"]), s.refresh_token_expire_days * 86400, str(user.id))
 
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
@@ -139,7 +144,8 @@ class AuthService:
             raise AuthorizationError("Account deactivated.")
 
         r = await get_redis()
-        await r.delete(self._bf_key(ip, email))
+        if r is not None:
+            await r.delete(self._bf_key(ip, email))
         log.info("login_success", user_id=str(user.id), ip=ip)
         return await self._issue_tokens(user)
 
@@ -148,10 +154,10 @@ class AuthService:
         jti, user_id = payload.get("jti", ""), payload.get("sub", "")
 
         r = await get_redis()
-        if not await r.exists(self._rt_key(jti)):
-            raise AuthenticationError("Session expired. Log in again.")
-
-        await r.delete(self._rt_key(jti))
+        if r is not None:
+            if not await r.exists(self._rt_key(jti)):
+                raise AuthenticationError("Session expired. Log in again.")
+            await r.delete(self._rt_key(jti))
         user = await _get_by_id(self.session, uuid.UUID(user_id))
         if not user:
             raise NotFoundError("User not found.")
@@ -163,7 +169,8 @@ class AuthService:
         try:
             payload = decode_token(refresh_token, expected_type="refresh")
             r = await get_redis()
-            await r.delete(self._rt_key(payload.get("jti", "")))
+            if r is not None:
+                await r.delete(self._rt_key(payload.get("jti", "")))
             log.info("logout", user_id=payload.get("sub"))
         except AuthenticationError:
             pass
