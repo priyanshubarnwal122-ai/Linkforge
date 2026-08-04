@@ -37,6 +37,12 @@ class AliasRecommenderService:
         # Call GenAI LLM API (Google Gemini / Groq / OpenAI)
         raw_candidates = await self._generate_llm_aliases(url)
 
+        # Fallback to smart semantic generator if LLM candidates are fewer than 4
+        fallback_candidates = self._generate_fallback_aliases(url, domain, parsed.path)
+        for fb in fallback_candidates:
+            if fb not in raw_candidates:
+                raw_candidates.append(fb)
+
         # Clean and sanitize candidates (must match pattern ^[a-zA-Z0-9_-]+$)
         cleaned_candidates: list[str] = []
         for cand in raw_candidates:
@@ -46,7 +52,7 @@ class AliasRecommenderService:
 
         selected_candidates = cleaned_candidates[:4]
 
-        # Check database availability for each LLM candidate alias
+        # Check database availability for each candidate alias
         recommendations: list[AliasOption] = []
         for candidate in selected_candidates:
             stmt = select(URL).where(
@@ -67,36 +73,42 @@ class AliasRecommenderService:
 
     async def _generate_llm_aliases(self, url: str) -> list[str]:
         """Queries GenAI LLM API (Google Gemini / Groq / OpenAI) for custom vanity aliases."""
+        api_key = (self.settings.gemini_api_key or "").strip("\"' \t\r\n")
+
         # 1. Google Gemini API
-        if self.settings.gemini_api_key:
-            try:
-                prompt = (
-                    f"Analyze this URL: '{url}'. Generate 4 short, catchy, hyphenated custom vanity alias suggestions "
-                    "for a URL shortener (e.g. 'react-framework', 'fastapi-guide', 'iphone15-deal'). "
-                    "Return ONLY a JSON array of 4 string aliases, for example: [\"alias-1\", \"alias-2\", \"alias-3\", \"alias-4\"]"
-                )
-                async with httpx.AsyncClient(timeout=4.0) as client:
-                    resp = await client.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.settings.gemini_api_key}",
-                        json={"contents": [{"parts": [{"text": prompt}]}]}
-                    )
-                    if resp.status_code == 200:
-                        res_json = resp.json()
-                        text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                        match = re.search(r"\[.*\]", text, re.DOTALL)
-                        if match:
-                            return json.loads(match.group(0))
-            except Exception as e:
-                log.warning("Gemini LLM API call failed", error=str(e))
+        if api_key:
+            models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]
+            prompt = (
+                f"Analyze this URL: '{url}'. Generate 4 short, catchy, hyphenated custom vanity alias suggestions "
+                "for a URL shortener (e.g. 'react-framework', 'fastapi-guide', 'iphone15-deal'). "
+                "Return ONLY a JSON array of 4 string aliases, for example: [\"alias-1\", \"alias-2\", \"alias-3\", \"alias-4\"]"
+            )
+            for model in models_to_try:
+                try:
+                    async with httpx.AsyncClient(timeout=3.5) as client:
+                        resp = await client.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+                            json={"contents": [{"parts": [{"text": prompt}]}]}
+                        )
+                        if resp.status_code == 200:
+                            res_json = resp.json()
+                            text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                            match = re.search(r"\[.*\]", text, re.DOTALL)
+                            if match:
+                                res = json.loads(match.group(0))
+                                if isinstance(res, list) and len(res) > 0:
+                                    return [str(x) for x in res]
+                except Exception as e:
+                    log.warning("Gemini LLM API call failed", model=model, error=str(e))
 
         # 2. OpenAI / Groq API
-        api_key = self.settings.groq_api_key or self.settings.openai_api_key
+        groq_or_openai_key = (self.settings.groq_api_key or self.settings.openai_api_key or "").strip("\"' \t\r\n")
         api_url = "https://api.groq.com/openai/v1/chat/completions" if self.settings.groq_api_key else "https://api.openai.com/v1/chat/completions"
         model_name = "llama3-8b-8192" if self.settings.groq_api_key else "gpt-4o-mini"
 
-        if api_key:
+        if groq_or_openai_key:
             try:
-                headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                headers = {"Authorization": f"Bearer {groq_or_openai_key}", "Content-Type": "application/json"}
                 payload = {
                     "model": model_name,
                     "messages": [
@@ -105,17 +117,45 @@ class AliasRecommenderService:
                     ],
                     "temperature": 0.5
                 }
-                async with httpx.AsyncClient(timeout=4.0) as client:
+                async with httpx.AsyncClient(timeout=3.5) as client:
                     resp = await client.post(api_url, json=payload, headers=headers)
                     if resp.status_code == 200:
                         content = resp.json()["choices"][0]["message"]["content"]
                         match = re.search(r"\[.*\]", content, re.DOTALL)
                         if match:
-                            return json.loads(match.group(0))
+                            res = json.loads(match.group(0))
+                            if isinstance(res, list) and len(res) > 0:
+                                return [str(x) for x in res]
             except Exception as e:
                 log.warning("LLM API call failed", error=str(e))
 
         return []
+
+    def _generate_fallback_aliases(self, url: str, domain: str, path: str) -> list[str]:
+        """Generates smart, relevant semantic aliases from domain & path keywords."""
+        domain_name = domain.split(".")[0] if "." in domain else domain
+        path_segments = [seg for seg in re.split(r"[/\-_.]+", path) if len(seg) > 2]
+
+        slugs = []
+        if path_segments:
+            main_path = path_segments[-1]
+            slugs.append(f"{domain_name}-{main_path}")
+            if len(path_segments) > 1:
+                slugs.append(f"{path_segments[0]}-{main_path}")
+            slugs.append(f"{main_path}-link")
+            slugs.append(f"{domain_name}-{path_segments[0]}")
+        
+        # Default fallbacks
+        slugs.extend([
+            f"{domain_name}-link",
+            f"{domain_name}-quick",
+            f"{domain_name}-share",
+            f"{domain_name}-hub",
+            "smart-alias",
+            "quick-redirect"
+        ])
+
+        return slugs
 
     def _detect_category(self, domain: str) -> str:
         d = domain.lower()
@@ -132,3 +172,4 @@ class AliasRecommenderService:
         if any(k in d for k in ["docs", "notion", "figma", "trello", "google", "drive"]):
             return "Productivity & Workspace"
         return "Web Resource"
+
