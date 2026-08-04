@@ -35,7 +35,8 @@ RUN groupadd --gid 1001 linkforge && \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=linkforge:linkforge . .
+COPY --chown=linkforge:linkforge backend/ .
+COPY --chown=linkforge:linkforge frontend/ /frontend
 
 USER linkforge
 
