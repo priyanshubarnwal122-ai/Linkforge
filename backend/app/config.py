@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     short_code_length: int = Field(default=7, ge=4, le=20)
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
 
+    @property
+    def effective_google_redirect_uri(self) -> str:
+        """Returns dynamic Google OAuth redirect URI based on deployment base_url."""
+        if self.google_redirect_uri and "localhost" not in self.google_redirect_uri:
+            return self.google_redirect_uri
+        base = self.base_url.rstrip("/")
+        return f"{base}/api/v1/auth/google/callback"
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "console"  # "console" in dev, "json" in production

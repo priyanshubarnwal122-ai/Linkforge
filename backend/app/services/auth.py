@@ -203,7 +203,7 @@ class AuthService:
             return "/?oauth_notice=1"
         params = {
             "client_id": s.google_client_id,
-            "redirect_uri": s.google_redirect_uri,
+            "redirect_uri": s.effective_google_redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
             "access_type": "offline",
@@ -223,7 +223,7 @@ class AuthService:
                     "code": code,
                     "client_id": s.google_client_id,
                     "client_secret": s.google_client_secret,
-                    "redirect_uri": s.google_redirect_uri,
+                    "redirect_uri": s.effective_google_redirect_uri,
                     "grant_type": "authorization_code",
                 },
             )
