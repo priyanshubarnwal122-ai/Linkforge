@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", pattern="^(development|staging|production)$")
     secret_key: str = Field(default="super_secret_key_at_least_32_characters_long_12345", min_length=32)
 
-    # Database
+    # Database — either set DATABASE_URL directly OR the individual fields below
+    database_url: str | None = None  # e.g. postgresql://user:pass@host:5432/db
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "linkforge"
@@ -58,12 +59,25 @@ class Settings(BaseSettings):
     log_format: str = "console"  # "console" in dev, "json" in production
 
     @property
-    def database_url(self) -> str:
+    def async_database_url(self) -> str:
+        """Always returns asyncpg-compatible URL for SQLAlchemy async engine."""
+        if self.database_url:
+            # Render gives postgresql:// — convert to asyncpg driver
+            url = self.database_url
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            return url
         return (f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
                 f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}")
 
     @property
-    def database_url_sync(self) -> str:
+    def sync_database_url(self) -> str:
+        """Returns psycopg2-compatible URL for Alembic sync migrations."""
+        if self.database_url:
+            url = self.database_url
+            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+            return url
         return (f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
                 f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}")
 

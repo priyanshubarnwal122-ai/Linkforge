@@ -46,7 +46,7 @@ class TimestampMixin:
 def _make_engine():
     s = get_settings()
     engine = create_async_engine(
-        s.database_url,
+        s.async_database_url,
         pool_size=s.db_pool_size,
         echo=s.db_echo,
         pool_pre_ping=True,   # test connections before using them
