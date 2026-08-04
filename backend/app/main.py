@@ -15,7 +15,6 @@ from app.routers import analytics, auth, health, links
 
 log = structlog.get_logger(__name__)
 
-
 def create_app() -> FastAPI:
     s = get_settings()
     setup_logging(s.log_level, s.log_format)
@@ -47,35 +46,49 @@ def create_app() -> FastAPI:
     app.include_router(links.router, prefix=API_PREFIX)
 
     import os
+    from pathlib import Path
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 
-    frontend_dir = "/frontend" if os.path.exists("/frontend") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
-    if not os.path.exists(frontend_dir):
-        frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-    if not os.path.exists(frontend_dir):
-        frontend_dir = "frontend"
+    current_dir = Path(__file__).resolve().parent
+    candidate_paths = [
+        current_dir.parent.parent / "frontend",
+        current_dir.parent / "frontend",
+        Path("/frontend"),
+        Path("frontend"),
+    ]
+
+    frontend_dir = None
+    for candidate in candidate_paths:
+        if candidate.exists() and (candidate / "index.html").exists():
+            frontend_dir = candidate
+            break
 
     @app.get("/", include_in_schema=False)
     async def serve_index():
-        index_path = os.path.join(frontend_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
+        if frontend_dir and (frontend_dir / "index.html").exists():
+            return FileResponse(frontend_dir / "index.html")
         return {"message": "LinkForge API is running"}
 
     @app.get("/styles.css", include_in_schema=False)
     async def serve_css():
-        return FileResponse(os.path.join(frontend_dir, "styles.css"))
+        if frontend_dir and (frontend_dir / "styles.css").exists():
+            return FileResponse(frontend_dir / "styles.css")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="styles.css not found")
 
     @app.get("/app.js", include_in_schema=False)
     async def serve_js():
-        return FileResponse(os.path.join(frontend_dir, "app.js"))
+        if frontend_dir and (frontend_dir / "app.js").exists():
+            return FileResponse(frontend_dir / "app.js")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="app.js not found")
 
     app.include_router(links.redirect_router)  # /s/{short_code}
 
-    if os.path.exists(frontend_dir):
-        app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-        app.mount("/assets", StaticFiles(directory=frontend_dir), name="assets")
+    if frontend_dir and frontend_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+        app.mount("/assets", StaticFiles(directory=str(frontend_dir)), name="assets")
 
     @app.on_event("startup")
     async def startup() -> None:
