@@ -36,6 +36,7 @@ A single short link routes **iPhone/iPad** users to the Apple App Store, **Andro
 
 ### 📈 7. High-Value Analytics & Chart.js Integration
 * **Visual Area Line Graphs**: Daily engagement trend analysis over time (`last_7_days`).
+* **Hourly Peak Traffic Heatmap**: 24-hour UTC click intensity bar chart for optimal posting windows.
 * **Unique Visitors Metric**: Database-level `COUNT(DISTINCT ip_address)` deduplication.
 * **Traffic Referrer Attribution**: Captures and categorizes incoming traffic sources (`LinkedIn`, `Twitter / X`, `WhatsApp`, `Telegram`, `Google Search`, `Direct`).
 
