@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,9 @@ class ClickEvent(Base, UUIDMixin):
     # Parsed from User-Agent header (no library — just string matching)
     browser: Mapped[str | None] = mapped_column(String(50), nullable=True)      # Chrome, Firefox, Safari…
     device_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Mobile, Desktop, Tablet
+
+    # Hour-of-day heatmap (0–23, UTC) — stored at insert so GROUP BY is O(1)
+    hour_of_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
         return f"<Click link={self.link_id} at={self.clicked_at}>"

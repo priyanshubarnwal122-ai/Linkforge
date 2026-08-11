@@ -1,0 +1,47 @@
+# .github/workflows/ci.yml
+# Runs on every PR and push to main.
+# Lints Python (ruff) and validates Docker build.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Python Lint (ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff
+        run: ruff check backend/app --select E,F,W,I --ignore E501
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy frontend into backend (mirrors Dockerfile expectation)
+        run: cp -r frontend backend/frontend
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --file backend/Dockerfile \
+            --tag linkforge:ci \
+            backend/

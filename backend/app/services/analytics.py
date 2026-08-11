@@ -90,14 +90,16 @@ async def record_click(link_id: uuid.UUID, request: Request) -> None:
 
     ua_string = request.headers.get("User-Agent")
     browser, device = _parse_ua(ua_string)
+    now = datetime.now(UTC)
 
     event = ClickEvent(
         link_id=link_id,
-        clicked_at=datetime.now(UTC),
+        clicked_at=now,
         ip_address=_get_ip(request),
         referer=_get_referer(request),
         browser=browser,
         device_type=device,
+        hour_of_day=now.hour,   # 0–23 UTC, stored once for O(1) GROUP BY heatmap
     )
 
     try:
@@ -201,6 +203,17 @@ async def get_link_stats(session: AsyncSession, link_id: uuid.UUID) -> dict:
     counts = Counter(_clean_referer(r) for r in raw_referers)
     top_referrers = [{"name": name, "count": count} for name, count in counts.most_common(5)]
 
+    # Hourly heatmap — GROUP BY hour_of_day (0–23)
+    hour_result = await session.execute(
+        select(ClickEvent.hour_of_day, func.count().label("count"))
+        .where(ClickEvent.link_id == link_id, ClickEvent.hour_of_day.isnot(None))
+        .group_by(ClickEvent.hour_of_day)
+        .order_by(ClickEvent.hour_of_day)
+    )
+    hour_map = {row.hour_of_day: row.count for row in hour_result}
+    # Always return all 24 slots so the frontend chart is uniform
+    hourly_heatmap = [{"hour": h, "count": hour_map.get(h, 0)} for h in range(24)]
+
     return {
         "total_clicks": total_clicks,
         "unique_clicks": unique_clicks,
@@ -209,4 +222,5 @@ async def get_link_stats(session: AsyncSession, link_id: uuid.UUID) -> dict:
         "top_browsers": top_browsers,
         "top_devices": top_devices,
         "top_referrers": top_referrers,
+        "hourly_heatmap": hourly_heatmap,
     }

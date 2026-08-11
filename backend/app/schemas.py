@@ -170,6 +170,12 @@ class DailyStats(BaseModel):
     clicks: int
 
 
+class HourlySlot(BaseModel):
+    """One slot in the 24-hour engagement heatmap."""
+    hour: int   # 0–23 (UTC)
+    count: int
+
+
 class TopItem(BaseModel):
     name: str
     count: int
@@ -184,6 +190,7 @@ class LinkStats(BaseModel):
     top_browsers: list[TopItem]
     top_devices: list[TopItem]
     top_referrers: list[TopItem]
+    hourly_heatmap: list[HourlySlot]  # always 24 items (hour 0–23)
 
 
 # ---------------------------------------------------------------------------

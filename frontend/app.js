@@ -372,6 +372,7 @@ function showQR(linkId) {
 }
 
 let clickChartInstance = null;
+let heatmapChartInstance = null;
 
 async function showAnalytics(linkId) {
   document.getElementById('totalClicks').textContent = '...';
@@ -426,6 +427,11 @@ async function showAnalytics(linkId) {
         }
       });
 
+      // Render hourly heatmap bar chart
+      if (data.hourly_heatmap && data.hourly_heatmap.length > 0) {
+        renderHeatmap(data.hourly_heatmap);
+      }
+
       // Render Referrers, Devices, and Browsers HTML
       const referrersHTML = data.top_referrers && data.top_referrers.length > 0
         ? data.top_referrers.map(r => `<span class="badge" style="background:var(--bg-input); border:1px solid var(--border-subtle); color:var(--text-main); margin-right:4px;">${r.name}: <strong>${r.count}</strong></span>`).join(' ')
@@ -453,4 +459,68 @@ async function showAnalytics(linkId) {
 
 function closeModal(modalId) {
   document.getElementById(modalId).classList.remove('open');
+}
+
+/**
+ * Renders the 24-bar hourly heatmap chart.
+ * Bars are colored by intensity: pale blue (quiet) → vivid orange-red (peak).
+ */
+function renderHeatmap(hourlyData) {
+  const ctx = document.getElementById('heatmapChartCanvas').getContext('2d');
+  if (heatmapChartInstance) {
+    heatmapChartInstance.destroy();
+  }
+
+  const maxCount = Math.max(...hourlyData.map(d => d.count), 1);
+
+  // Hour labels: 0 → 12AM, 6 → 6AM, 12 → 12PM, 18 → 6PM
+  const labels = hourlyData.map(d => {
+    const h = d.hour;
+    if (h === 0) return '12AM';
+    if (h === 12) return '12PM';
+    return h < 12 ? `${h}AM` : `${h - 12}PM`;
+  });
+
+  // Colour intensity: low = steel-blue, high = vivid orange-red
+  const colors = hourlyData.map(d => {
+    const ratio = d.count / maxCount;
+    const r = Math.round(59 + (239 - 59) * ratio);   // 59 (blue) → 239 (red)
+    const g = Math.round(130 + (68 - 130) * ratio);  // 130 → 68
+    const b = Math.round(246 + (56 - 246) * ratio);  // 246 → 56
+    return `rgba(${r},${g},${b},0.85)`;
+  });
+
+  heatmapChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Clicks',
+        data: hourlyData.map(d => d.count),
+        backgroundColor: colors,
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Hour ${hourlyData[items[0].dataIndex].hour}:00 UTC`,
+            label: (item) => ` ${item.raw} click${item.raw !== 1 ? 's' : ''}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 9 }, maxRotation: 0 }
+        },
+        y: { beginAtZero: true, ticks: { precision: 0 }, display: false }
+      }
+    }
+  });
 }

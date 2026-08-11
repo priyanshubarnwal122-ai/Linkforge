@@ -34,6 +34,7 @@ async def link_stats(link_id: str, db: DbSession) -> LinkStats:
         top_browsers=raw["top_browsers"],
         top_devices=raw["top_devices"],
         top_referrers=raw["top_referrers"],
+        hourly_heatmap=raw["hourly_heatmap"],
     )
 
 
