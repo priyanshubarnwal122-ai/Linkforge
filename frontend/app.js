@@ -7,6 +7,20 @@ let userToken = localStorage.getItem('access_token');
 let userLinks = [];
 
 let recommendDebounceTimer = null;
+let qrObjectUrl = null;
+
+async function authenticatedFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (userToken) headers.set('Authorization', `Bearer ${userToken}`);
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    localStorage.removeItem('access_token');
+    userToken = null;
+    alert('Your session has expired. Please sign in again.');
+    window.location.reload();
+  }
+  return response;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // Handle OAuth hash callback token
@@ -260,11 +274,10 @@ async function handleShorten(event) {
   };
 
   try {
-    const res = await fetch(`${API_BASE}/links/`, {
+    const res = await authenticatedFetch(`${API_BASE}/links/`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userToken}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload)
     });
@@ -290,9 +303,7 @@ async function handleShorten(event) {
 async function loadUserLinks() {
   if (!userToken) return;
   try {
-    const res = await fetch(`${API_BASE}/links/`, {
-      headers: { 'Authorization': `Bearer ${userToken}` }
-    });
+    const res = await authenticatedFetch(`${API_BASE}/links/`);
     if (res.ok) {
       userLinks = await res.json();
       renderTable();
@@ -306,9 +317,7 @@ async function loadIncidents() {
   const panel = document.getElementById('incidentsPanel');
   if (!panel || !userToken) return;
   try {
-    const res = await fetch(`${API_BASE}/incidents/`, {
-      headers: { 'Authorization': `Bearer ${userToken}` }
-    });
+    const res = await authenticatedFetch(`${API_BASE}/incidents/`);
     if (!res.ok) return;
     const incidents = await res.json();
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[char]));
@@ -325,9 +334,7 @@ async function loadIncidents() {
 }
 
 async function investigateIncident(id) {
-  const res = await fetch(`${API_BASE}/incidents/${id}/investigate`, {
-    method: 'POST', headers: { 'Authorization': `Bearer ${userToken}` }
-  });
+  const res = await authenticatedFetch(`${API_BASE}/incidents/${id}/investigate`, { method: 'POST' });
   if (!res.ok) return;
   const result = await res.json();
   const finding = result.investigation;
@@ -397,11 +404,20 @@ function copyToClipboard(text, btnElement) {
   });
 }
 
-function showQR(linkId) {
+async function showQR(linkId) {
   const qrUrl = `${API_BASE}/links/${linkId}/qr`;
-  document.getElementById('qrImage').src = qrUrl;
-  document.getElementById('qrDownloadBtn').href = qrUrl;
-  document.getElementById('qrModal').classList.add('open');
+  try {
+    const response = await authenticatedFetch(qrUrl);
+    if (!response.ok) throw new Error('Unable to generate QR code.');
+    const blob = await response.blob();
+    if (qrObjectUrl) URL.revokeObjectURL(qrObjectUrl);
+    qrObjectUrl = URL.createObjectURL(blob);
+    document.getElementById('qrImage').src = qrObjectUrl;
+    document.getElementById('qrDownloadBtn').href = qrObjectUrl;
+    document.getElementById('qrModal').classList.add('open');
+  } catch (err) {
+    alert(err.message || 'Unable to generate QR code.');
+  }
 }
 
 let clickChartInstance = null;
@@ -415,7 +431,7 @@ async function showAnalytics(linkId) {
   document.getElementById('analyticsModal').classList.add('open');
 
   try {
-    const res = await fetch(`${API_BASE}/links/${linkId}/stats`);
+    const res = await authenticatedFetch(`${API_BASE}/links/${linkId}/stats`);
     if (res.ok) {
       const data = await res.json();
       document.getElementById('totalClicks').textContent = data.total_clicks || 0;
