@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     groq_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
+    llm_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
 
     # App behaviour
     base_url: str = "http://localhost:8000"

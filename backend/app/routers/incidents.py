@@ -7,8 +7,11 @@ from sqlalchemy import select
 
 from app.deps import CurrentUserId, DbSession, require_verified
 from app.exceptions import NotFoundError
-from app.models.incident import Incident, IncidentAction, OperationalEvent
+from app.models.incident import Incident, IncidentAction
 from app.schemas import IncidentActionRequest
+from app.services.incident_investigation import (
+    investigate_incident as run_investigation,
+)
 from app.services.incidents import (
     approve_remediation,
     detect_incidents,
@@ -50,22 +53,12 @@ async def investigate_incident(incident_id: str, user_id: CurrentUserId, db: DbS
     incident = (await db.execute(select(Incident).where(Incident.id == incident_uuid))).scalars().first()
     if not incident:
         return {"status": "not_found"}
-    events = (await db.execute(select(OperationalEvent).where(OperationalEvent.incident_id == incident.id).order_by(OperationalEvent.occurred_at))).scalars().all()
-    evidence = [{"event_id": str(event.id), "event_type": event.event_type, "component": event.component,
-                 "occurred_at": event.occurred_at, "message": event.message, "evidence": event.evidence or {}}
-                for event in events]
-    finding = {
-        "observed_facts": [f"{len(events)} persisted events are linked to this incident."],
-        "root_cause_hypothesis": f"The {incident.component} component experienced elevated errors.",
-        "confidence": "medium" if events else "low",
-        "unknowns": ["Underlying dependency cause is not established by redirect telemetry alone."],
-        "recommended_next_step": "Check service health and dependency logs before approving remediation.",
-        "evidence": evidence,
-    }
+    finding = await run_investigation(db, incident)
+    evidence = [item.model_dump() for item in finding.evidence]
     incident.evidence = evidence
-    incident.summary = finding["root_cause_hypothesis"]
+    incident.summary = finding.root_cause_hypothesis
     await db.flush()
-    return {"status": "complete", "incident_id": incident_id, "investigation": finding}
+    return {"status": "complete", "incident_id": incident_id, "investigation": finding.model_dump()}
 
 
 def _action_response(record: IncidentAction) -> dict:
