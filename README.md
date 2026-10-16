@@ -88,7 +88,7 @@ url_shortener/
 │   ├── alembic/              # Database migration revisions
 │   ├── Dockerfile            # Multi-stage production Dockerfile
 │   └── requirements.txt      # Production Python dependencies
-├── frontend/                 # Enterprise Single-Page Dashboard UI
+├── frontend/                 # Enterprise Single-Page Dashboard UI (canonical copy)
 │   ├── index.html            # Dashboard HTML structure
 │   ├── styles.css            # Custom CSS token design system
 │   └── app.js                # Async API client & Chart.js graphs

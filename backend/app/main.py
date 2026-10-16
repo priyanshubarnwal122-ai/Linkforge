@@ -64,9 +64,7 @@ def create_app() -> FastAPI:
     current_dir = Path(__file__).resolve().parent
     candidate_paths = [
         current_dir.parent.parent / "frontend",
-        current_dir.parent / "frontend",
         Path("/frontend"),
-        Path("frontend"),
     ]
 
     frontend_dir = None
