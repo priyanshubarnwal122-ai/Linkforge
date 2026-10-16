@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add hour_of_day (0-23) column — NULL for historic rows, populated for all new clicks
+    # Add hour_of_day (0-23) column; NULL for historic rows, populated for all new clicks
     op.add_column(
         'click_events',
         sa.Column('hour_of_day', sa.Integer(), nullable=True)

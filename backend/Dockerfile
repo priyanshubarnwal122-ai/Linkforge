@@ -2,7 +2,7 @@
 # Stage 1 (builder): install deps into venv
 # Stage 2 (production): copy only the venv — no build tools in the final image
 
-FROM python:3.12-slim AS builder
+FROM python:3.12.8-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -16,11 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY backend/requirements.lock.txt .
+RUN pip install --requirement requirements.lock.txt
 
 
-FROM python:3.12-slim AS production
+FROM python:3.12.8-slim AS production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -35,10 +35,8 @@ RUN groupadd --gid 1001 linkforge && \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=linkforge:linkforge . .
-
-# frontend/ is bundled inside backend/ for build context access
-RUN if [ -d "/app/frontend" ]; then cp -r /app/frontend /frontend; fi
+COPY --chown=linkforge:linkforge backend/ .
+COPY --chown=linkforge:linkforge frontend/ /frontend/
 
 USER linkforge
 

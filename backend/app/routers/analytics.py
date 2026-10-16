@@ -8,7 +8,6 @@ import io
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from app.config import get_settings
 from app.deps import CurrentUserId, DbSession
 from app.schemas import LinkStats
 from app.services.analytics import get_link_stats
@@ -18,12 +17,12 @@ router = APIRouter(prefix="/links", tags=["Analytics"])
 
 
 @router.get("/{link_id}/stats", response_model=LinkStats, summary="Get click analytics for a link")
-async def link_stats(link_id: str, db: DbSession) -> LinkStats:
+async def link_stats(link_id: str, user_id: CurrentUserId, db: DbSession) -> LinkStats:
     """
     Returns total clicks, today's count, last 7 days breakdown,
     and top browsers / devices.
     """
-    link = await LinkService(db).get_one_public(link_id)
+    link = await LinkService(db).get_one(link_id, user_id)
     raw = await get_link_stats(db, link.id)
 
     return LinkStats(
@@ -39,15 +38,14 @@ async def link_stats(link_id: str, db: DbSession) -> LinkStats:
 
 
 @router.get("/{link_id}/qr", summary="Download QR code for a link")
-async def get_qr_code(link_id: str, db: DbSession) -> StreamingResponse:
+async def get_qr_code(link_id: str, user_id: CurrentUserId, db: DbSession) -> StreamingResponse:
     """
     Generates a PNG QR code for the short URL.
     The QR code points to the short link, not the original URL.
     """
     import qrcode  # import here so app starts even if qrcode not installed
 
-    link = await LinkService(db).get_one_public(link_id)
-    s = get_settings()
+    link = await LinkService(db).get_one(link_id, user_id)
     short_url = build_response(link).short_url  # handles custom_alias fallback
 
     qr = qrcode.QRCode(version=1, box_size=10, border=4)

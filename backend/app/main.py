@@ -3,6 +3,8 @@ app/main.py — FastAPI app setup.
 """
 from __future__ import annotations
 
+import uuid
+
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,7 @@ from app.cache import close_redis
 from app.config import get_settings, setup_logging
 from app.database import close_db
 from app.exceptions import register_exception_handlers
-from app.routers import analytics, auth, health, links
+from app.routers import analytics, auth, health, incidents, links
 
 log = structlog.get_logger(__name__)
 
@@ -38,15 +40,24 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.middleware("http")
+    async def request_context(request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
     register_exception_handlers(app)
 
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(analytics.router, prefix=API_PREFIX)
     app.include_router(links.router, prefix=API_PREFIX)
+    app.include_router(incidents.router, prefix=API_PREFIX)
 
-    import os
     from pathlib import Path
+
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 
@@ -92,19 +103,20 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup() -> None:
-        # Safety net: create all tables if they don't exist yet
-        # (alembic handles proper migrations; this catches fresh DBs)
-        try:
-            from app.database import engine
-            from app.database import Base
-            import app.models.user  # noqa: F401
-            import app.models.url   # noqa: F401
-            import app.models.click # noqa: F401
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            log.info("db_tables_ready")
-        except Exception as e:
-            log.warning("db_create_all_failed", error=str(e))
+        # Development convenience only. Production and staging rely on the
+        # migration step in start.sh so schema drift cannot be hidden.
+        if s.environment == "development":
+            try:
+                import app.models.click  # noqa: F401
+                import app.models.incident  # noqa: F401
+                import app.models.url  # noqa: F401
+                import app.models.user  # noqa: F401
+                from app.database import Base, engine
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                log.info("db_tables_ready")
+            except Exception as e:
+                log.warning("db_create_all_failed", error=str(e))
         log.info("app_ready", name=s.app_name, env=s.environment)
 
     @app.on_event("shutdown")

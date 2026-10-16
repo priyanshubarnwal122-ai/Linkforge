@@ -6,6 +6,7 @@ app/routers/health.py — Simple health check.
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.database import get_db_session
@@ -24,5 +25,11 @@ async def readiness() -> dict:
         async for session in get_db_session():
             await session.execute(text("SELECT 1"))
         return {"status": "ready", "db": "connected"}
-    except Exception as e:
-        return {"status": "degraded", "db": str(e)}
+    except Exception:
+        # A non-2xx response lets Docker, Render, and load balancers remove
+        # an instance from service while avoiding database details in health
+        # responses.
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "db": "unavailable"},
+        )

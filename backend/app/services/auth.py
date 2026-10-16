@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import get_redis
 from app.config import get_settings
-from app.exceptions import AuthenticationError, AuthorizationError, ConflictError, NotFoundError
+from app.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+)
 from app.models.user import User
 from app.schemas import UserCreate
 from app.security import (

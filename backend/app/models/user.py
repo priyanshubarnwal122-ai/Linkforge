@@ -2,12 +2,14 @@
 app/models/user.py
 """
 from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin, UUIDMixin
+
 
 class User(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "users"

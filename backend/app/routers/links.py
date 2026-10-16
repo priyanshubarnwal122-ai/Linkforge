@@ -3,13 +3,21 @@ app/routers/links.py — URL shortener endpoints + redirect.
 """
 from __future__ import annotations
 
+from time import perf_counter
+
 from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import RedirectResponse
 
+from app.cache import allow_rate_limit
 from app.deps import CurrentUserId, DbSession
-from app.exceptions import AuthenticationError
-from app.schemas import AliasRecommendRequest, AliasRecommendResponse, LinkCreate, LinkResponse
-from app.services.analytics import record_click
+from app.exceptions import AuthenticationError, LinkForgeError, RateLimitError
+from app.schemas import (
+    AliasRecommendRequest,
+    AliasRecommendResponse,
+    LinkCreate,
+    LinkResponse,
+)
+from app.services.analytics import record_click, record_redirect_event
 from app.services.links import LinkService, build_response, pick_destination
 
 # /api/v1/links  — CRUD for authenticated users
@@ -27,8 +35,11 @@ async def recommend_alias(data: AliasRecommendRequest, db: DbSession) -> AliasRe
 
 @router.post("/", response_model=LinkResponse, status_code=201, summary="Shorten a URL")
 async def create_link(
-    data: LinkCreate, background_tasks: BackgroundTasks, user_id: CurrentUserId, db: DbSession
+    data: LinkCreate, request: Request, background_tasks: BackgroundTasks, user_id: CurrentUserId, db: DbSession
 ) -> LinkResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    if not await allow_rate_limit(f"create:{client_ip}", limit=30, window_seconds=60):
+        raise RateLimitError("Too many link creation requests. Try again later.")
     link = await LinkService(db).create(data, user_id, background_tasks)
     return build_response(link)
 
@@ -82,6 +93,7 @@ async def redirect_to_url(
     if short_code in {"favicon.ico", "styles.css", "app.js", "index.html", "robots.txt"} or "." in short_code:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Not a short link")
+    started = perf_counter()
     try:
         link = await LinkService(db).redirect(short_code, password=pw)
     except AuthenticationError as err:
@@ -107,9 +119,14 @@ async def redirect_to_url(
   </div>
 </body>
 </html>"""
+        background_tasks.add_task(record_redirect_event, status_code=401, latency_ms=(perf_counter() - started) * 1000, error=err.error_code)
         return HTMLResponse(content=html, status_code=401 if pw else 200)
+    except LinkForgeError as err:
+        background_tasks.add_task(record_redirect_event, status_code=err.status_code, latency_ms=(perf_counter() - started) * 1000, error=err.error_code)
+        raise
 
     destination = pick_destination(link, request.headers.get("User-Agent"))
     background_tasks.add_task(record_click, link.id, request)
+    background_tasks.add_task(record_redirect_event, status_code=302, latency_ms=(perf_counter() - started) * 1000)
     return RedirectResponse(url=destination, status_code=302)
 

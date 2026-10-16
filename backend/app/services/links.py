@@ -13,11 +13,16 @@ from datetime import UTC, datetime
 import httpx
 import structlog
 from fastapi import BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.exceptions import AuthenticationError, ConflictError, LinkExpiredError, NotFoundError
+from app.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    LinkExpiredError,
+    NotFoundError,
+)
 from app.models.url import URL
 from app.schemas import LinkCreate, LinkResponse
 from app.security import hash_password, verify_password
@@ -70,6 +75,10 @@ def build_response(link: URL) -> LinkResponse:
 async def _fetch_title(link_id: uuid.UUID, url: str) -> None:
     from app.database import SessionLocal
     try:
+        # Title fetching is best-effort and must never turn the shortener into
+        # an SSRF proxy. LinkCreate applies the same public-destination policy.
+        from app.schemas import LinkCreate
+        LinkCreate(original_url=url)
         async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             res = await client.get(url, headers={"User-Agent": "LinkForge/1.0 (+title-fetch)"})
 
@@ -192,11 +201,15 @@ class LinkService:
         if link.max_clicks is not None and link.click_count >= link.max_clicks:
             raise LinkExpiredError(f"Link reached its {link.max_clicks}-click limit.")
 
-        if link.is_one_time:
-            link.deleted_at = datetime.now(UTC)
-        else:
-            link.click_count += 1
-
-        self.session.add(link)
-        await self.session.flush()
+        now = datetime.now(UTC)
+        # Reserve the click atomically. This prevents concurrent requests from
+        # exceeding max_clicks or consuming a one-time link more than once.
+        values = {"deleted_at": now} if link.is_one_time else {"click_count": URL.click_count + 1}
+        predicates = [URL.id == link.id, URL.is_active.is_(True), URL.deleted_at.is_(None)]
+        if not link.is_one_time and link.max_clicks is not None:
+            predicates.append(URL.click_count < link.max_clicks)
+        result = await self.session.execute(update(URL).where(*predicates).values(**values))
+        if result.rowcount != 1:
+            raise LinkExpiredError("This link is no longer available.")
+        await self.session.refresh(link)
         return link

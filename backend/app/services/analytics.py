@@ -8,6 +8,7 @@ Everything is intentionally simple:
 """
 from __future__ import annotations
 
+import hashlib
 import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta
@@ -18,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.click import ClickEvent
+from app.services.incidents import record_event
 
 log = structlog.get_logger(__name__)
 
@@ -56,9 +58,6 @@ def _parse_ua(ua: str | None) -> tuple[str, str]:
         browser = "Other"
 
     return browser, device
-
-
-import hashlib
 
 
 def _anonymize_ip(ip: str | None) -> str | None:
@@ -109,6 +108,24 @@ async def record_click(link_id: uuid.UUID, request: Request) -> None:
         log.info("click_recorded", link_id=str(link_id), browser=browser, device=device)
     except Exception as e:
         log.warning("click_record_failed", link_id=str(link_id), error=str(e))
+
+
+async def record_redirect_event(*, status_code: int, latency_ms: float, error: str | None = None) -> None:
+    """Persist a small operational signal without blocking the redirect."""
+    from app.database import SessionLocal
+    try:
+        async with SessionLocal() as session:
+            await record_event(
+                session,
+                event_type="redirect_failure" if status_code >= 400 else "redirect_success",
+                component="redirect",
+                severity="error" if status_code >= 400 else "info",
+                message=error or "redirect completed",
+                evidence={"status_code": status_code, "latency_ms": round(latency_ms, 2)},
+            )
+            await session.commit()
+    except Exception as exc:
+        log.warning("redirect_event_record_failed", error=str(exc))
 
 
 def _clean_referer(referer: str | None) -> str:

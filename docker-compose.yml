@@ -15,7 +15,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-linkforge}
       POSTGRES_USER: ${POSTGRES_USER:-linkforge_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      # This fallback is for local development only. Override it in .env for
+      # any shared or non-local environment.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-linkforge_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -47,20 +49,10 @@ services:
 
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: linkforge_api
     restart: unless-stopped
-    command:
-      - uvicorn
-      - app.main:app
-      - --host
-      - "0.0.0.0"
-      - --port
-      - "8000"
-      - --reload
-      - --reload-dir
-      - /app/app
     volumes:
       - ./backend:/app
       - ./frontend:/frontend
@@ -72,12 +64,19 @@ services:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/api/v1/health/ready"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
 
   adminer:
     image: adminer:latest

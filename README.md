@@ -112,12 +112,69 @@ url_shortener/
 git clone https://github.com/priyanshubarnwal122-ai/Linkforge.git
 cd Linkforge
 
-# 2. Build and launch containers
+# 2. Create local configuration (the example contains no real credentials)
+cp .env.example .env
+
+# 3. Build and launch containers
 docker compose up -d --build
 
-# 3. Access LinkForge Dashboard
+# 4. Access LinkForge Dashboard
 # Open http://localhost:8000 in your web browser!
 ```
+
+The API container waits for healthy PostgreSQL and Redis containers before
+starting. Check deployment status with:
+
+```bash
+docker compose ps
+curl http://localhost:8000/api/v1/health/live
+curl http://localhost:8000/api/v1/health/ready
+```
+
+`/live` confirms that the process is running; `/ready` returns HTTP 503 until
+the database is reachable. For startup or migration problems, inspect
+`docker compose logs api` and retry after the database healthcheck passes.
+To reset local database and cache data, use `docker compose down -v` (this
+deletes the local Docker volumes).
+
+The Compose API service uses the same production startup path as Render: it
+waits for PostgreSQL and Redis, runs `alembic upgrade head` (with retries for a
+slow database), and then starts one Uvicorn worker. The Docker build context is
+the repository root so `frontend/` is copied directly into the image; no
+generated frontend copy is required. To exercise the image without Compose:
+
+```bash
+docker build --file backend/Dockerfile --tag linkforge:local .
+docker run --rm --env-file .env -p 8000:8000 linkforge:local
+```
+
+For code-only checks, the repository pins Python 3.12.8 in `.python-version`
+and provides one test entry point:
+
+```bash
+make test                 # offline unit tests (stdlib unittest)
+make lint                 # ruff, when installed in the active environment
+make compile              # Python bytecode compilation
+make docker-config        # validates Compose using .env.example
+```
+
+On systems without GNU Make, the test equivalent is:
+
+```bash
+python -m unittest discover -s tests -q
+```
+
+`backend/requirements.lock.txt` is the resolved deployment dependency lock;
+the Docker image installs that lockfile. Update it deliberately when changing
+dependencies.
+
+### Render deployment
+
+Render uses `render.yaml` to provision the API, PostgreSQL, and Redis. Set the
+`SECRET_KEY` and any optional integration keys in the Render dashboard; do not
+commit a production `.env`. The service healthcheck uses
+`/api/v1/health/live`, while database readiness is available at
+`/api/v1/health/ready` for troubleshooting.
 
 ---
 

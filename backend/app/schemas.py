@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from ipaddress import ip_address
 from typing import Generic, TypeVar
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -136,8 +138,20 @@ class LinkCreate(BaseModel):
         if v is None:
             return v
         v = v.strip()
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
+        parsed = urlparse(v)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("URL must be a valid http:// or https:// URL")
+        if parsed.username or parsed.password:
+            raise ValueError("URLs containing embedded credentials are not allowed")
+        host = parsed.hostname.lower().rstrip(".")
+        if host == "localhost" or host.endswith(".localhost"):
+            raise ValueError("Private or local destinations are not allowed")
+        try:
+            address = ip_address(host)
+        except ValueError:
+            address = None
+        if address and (address.is_private or address.is_loopback or address.is_link_local or address.is_reserved):
+            raise ValueError("Private or local destinations are not allowed")
         return v
 
 
@@ -211,4 +225,8 @@ class AliasRecommendResponse(BaseModel):
     category: str
     trust_score: int = 95
     recommendations: list[AliasOption]
+
+
+class IncidentActionRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=50)
 

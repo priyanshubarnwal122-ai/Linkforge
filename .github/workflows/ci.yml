@@ -21,13 +21,19 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.8"
 
       - name: Install ruff
-        run: pip install ruff
+        run: pip install ruff==0.9.10
 
       - name: Run ruff
         run: ruff check backend/app --select E,F,W,I --ignore E501
+
+      - name: Compile Python sources
+        run: python -m compileall -q backend/app
+
+      - name: Run offline unit tests
+        run: make test
 
   docker-build:
     name: Docker Build Check
@@ -36,12 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy frontend into backend (mirrors Dockerfile expectation)
-        run: cp -r frontend backend/frontend
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
 
       - name: Build Docker image
         run: |
           docker build \
             --file backend/Dockerfile \
             --tag linkforge:ci \
-            backend/
+            .

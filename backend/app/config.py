@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import logging
 import sys
@@ -8,6 +9,7 @@ from typing import Any
 import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

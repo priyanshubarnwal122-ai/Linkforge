@@ -5,8 +5,8 @@ Redis is optional — if unavailable, the app runs in degraded mode
 """
 from __future__ import annotations
 
-import structlog
 import redis.asyncio as aioredis
+import structlog
 
 from app.config import get_settings
 
@@ -49,3 +49,19 @@ async def close_redis() -> None:
         await _client.aclose()
         _client = None
     _redis_available = None
+
+
+async def allow_rate_limit(key: str, *, limit: int, window_seconds: int) -> bool:
+    """Best-effort fixed-window limiter; degraded mode allows traffic if Redis is down."""
+    client = await get_redis()
+    if client is None:
+        return True
+    bucket = f"linkforge:rate:{key}"
+    try:
+        count = await client.incr(bucket)
+        if count == 1:
+            await client.expire(bucket, window_seconds)
+        return count <= limit
+    except Exception as exc:
+        log.warning("rate_limit_failed", error=str(exc))
+        return True

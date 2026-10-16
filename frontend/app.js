@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   checkAuth();
   loadUserLinks();
+  loadIncidents();
   setupUrlInputListener();
 
   if (window.location.search.includes('oauth_notice=1')) {
@@ -299,6 +300,38 @@ async function loadUserLinks() {
   } catch (err) {
     console.error('Failed to load links:', err);
   }
+}
+
+async function loadIncidents() {
+  const panel = document.getElementById('incidentsPanel');
+  if (!panel || !userToken) return;
+  try {
+    const res = await fetch(`${API_BASE}/incidents/`, {
+      headers: { 'Authorization': `Bearer ${userToken}` }
+    });
+    if (!res.ok) return;
+    const incidents = await res.json();
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[char]));
+    panel.innerHTML = incidents.length ? incidents.map(item => `
+      <div style="padding: .75rem 0; border-bottom: 1px solid var(--border-subtle);">
+        <strong>${escapeHtml(item.title)}</strong>
+        <span class="badge badge-feature" style="margin-left: .5rem;">${escapeHtml(item.severity)}</span>
+        <div style="font-size: .85rem; margin-top: .25rem;">${escapeHtml(item.summary || 'No summary available.')}</div>
+        <button class="btn-secondary" style="margin-top: .5rem;" onclick="investigateIncident('${item.id}')">Investigate</button>
+      </div>`).join('') : 'No active incidents.';
+  } catch (err) {
+    console.error('Failed to load incidents:', err);
+  }
+}
+
+async function investigateIncident(id) {
+  const res = await fetch(`${API_BASE}/incidents/${id}/investigate`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${userToken}` }
+  });
+  if (!res.ok) return;
+  const result = await res.json();
+  const finding = result.investigation;
+  alert(`${finding.root_cause_hypothesis}\n\nObserved: ${finding.observed_facts.join(' ')}\n\nNext step: ${finding.recommended_next_step}`);
 }
 
 function renderTable() {

@@ -144,7 +144,7 @@ class AliasRecommenderService:
                 slugs.append(f"{path_segments[0]}-{main_path}")
             slugs.append(f"{main_path}-link")
             slugs.append(f"{domain_name}-{path_segments[0]}")
-        
+
         # Default fallbacks
         slugs.extend([
             f"{domain_name}-link",
