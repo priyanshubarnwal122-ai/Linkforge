@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+set -eu
 
 echo "=== LinkForge Startup ==="
 echo "Running database migrations..."
@@ -18,5 +18,6 @@ until alembic upgrade head; do
     attempt=$((attempt + 1))
     sleep 2
 done
+
 echo "Migrations complete. Starting server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

@@ -122,6 +122,14 @@ docker compose up -d --build
 # Open http://localhost:8000 in your web browser!
 ```
 
+On Windows, Docker Desktop must be running before Compose can contact the
+Linux engine. If Docker reports that `dockerDesktopLinuxEngine` is missing,
+start it with `docker desktop start` (or open Docker Desktop), then retry the
+Compose command. If old containers from an earlier checkout claim the fixed
+LinkForge names, stop the old Compose project first with
+`docker compose down`; do not use `down -v` unless deleting local database data
+is intended.
+
 The API container waits for healthy PostgreSQL and Redis containers before
 starting. Check deployment status with:
 
